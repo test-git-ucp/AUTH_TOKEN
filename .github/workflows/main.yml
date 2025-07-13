@@ -1,6 +1,6 @@
 name: Windows RDP
 
-on: [push,workflow_dispatch]
+on: [push]
 
 jobs:
   build:
@@ -22,7 +22,7 @@ jobs:
       run: |
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
         Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-        Set-LocalUser -Name "runneradmin" -Password (ConvertTo-SecureString "12345678" -AsPlainText -Force)
+        Set-LocalUser -Name "runneradmin" -Password (ConvertTo-SecureString "Str0ngP@ssw0rd!" -AsPlainText -Force)
 
     - name: Start Ngrok Tunnel
       run: .\ngrok\ngrok.exe tcp 3389
