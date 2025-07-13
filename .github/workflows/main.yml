@@ -29,14 +29,32 @@ jobs:
       - name: Start Ngrok Tunnel and Show RDP Info
         shell: powershell
         run: |
-          Start-Process "$PWD\ngrok\ngrok.exe" -ArgumentList "tcp 3389"
-          Start-Sleep -Seconds 15
+          # Start ngrok tunnel
+          Start-Process "$PWD\ngrok\ngrok.exe" -ArgumentList "tcp 3389" -NoNewWindow
+          Start-Sleep -Seconds 10
 
-          $tunnelInfo = Invoke-RestMethod -Uri http://127.0.0.1:4040/api/tunnels
+          # Retry logic to wait for ngrok to become ready
+          $success = $false
+          for ($i = 1; $i -le 5; $i++) {
+            try {
+              $tunnelInfo = Invoke-RestMethod -Uri http://127.0.0.1:4040/api/tunnels
+              $success = $true
+              break
+            } catch {
+              Write-Output "Ngrok not ready yet... retrying in 5 seconds ($i/5)"
+              Start-Sleep -Seconds 5
+            }
+          }
+
+          if (-not $success) {
+            Write-Error "Ngrok tunnel not available. Exiting."
+            exit 1
+          }
+
           $rdpAddress = $tunnelInfo.tunnels[0].public_url -replace "tcp://", ""
 
           Write-Output "=========================================="
-          Write-Output "Connect to RDP using:"
+          Write-Output "Connect to RDP:"
           Write-Output "Address: $rdpAddress"
           Write-Output "Username: runneradmin"
           Write-Output "Password: YourPassword123!"
