@@ -1,9 +1,9 @@
-name: Windows RDP via Ngrok
+name: Temporary Windows RDP via Ngrok
 
 on: [push]
 
 jobs:
-  build:
+  rdp-tunnel:
     runs-on: windows-latest
 
     steps:
@@ -13,52 +13,33 @@ jobs:
       - name: Extract Ngrok
         run: Expand-Archive ngrok.zip -DestinationPath ngrok
 
-      - name: Auth Ngrok
+      - name: Authenticate Ngrok
         run: .\ngrok\ngrok.exe authtoken $env:NGROK_AUTH_TOKEN
         env:
           NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
 
-      - name: Enable RDP and Disable NLA (Fix 0x4 error)
+      - name: Enable RDP and Disable NLA
         run: |
-          # Enable Remote Desktop
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
-
-          # Enable Remote Desktop firewall rules
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-
-          # Disable NLA (Network Level Authentication) to avoid error 0x4
           Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name 'UserAuthentication' -Value 0
-
-          # Set strong password for runneradmin
           Set-LocalUser -Name "runneradmin" -Password (ConvertTo-SecureString "Str0ngP@ssw0rd!" -AsPlainText -Force)
 
-      - name: Start Ngrok Tunnel
+      - name: Start Ngrok Tunnel and Show Info
         shell: powershell
         run: |
           Start-Process "$PWD\ngrok\ngrok.exe" -ArgumentList "tcp 3389" -NoNewWindow
           Start-Sleep -Seconds 15
-
-          # Try to get public URL from Ngrok API with retry
-          $success = $false
-          for ($i=0; $i -lt 5; $i++) {
-              try {
-                  $tunnelInfo = Invoke-RestMethod -Uri http://127.0.0.1:4040/api/tunnels
-                  $success = $true
-                  break
-              } catch {
-                  Write-Host "Waiting for ngrok tunnel to start... retry $($i+1)"
-                  Start-Sleep -Seconds 5
-              }
-          }
-
-          if (-not $success) {
-              Write-Error "Ngrok tunnel failed to start"
-              exit 1
-          }
-
+          $tunnelInfo = Invoke-RestMethod -Uri http://127.0.0.1:4040/api/tunnels
           $rdpAddress = $tunnelInfo.tunnels[0].public_url -replace "tcp://", ""
           Write-Output "=========================================="
           Write-Output "RDP ADDRESS: $rdpAddress"
           Write-Output "USERNAME   : runneradmin"
           Write-Output "PASSWORD   : Str0ngP@ssw0rd!"
           Write-Output "=========================================="
+
+      - name: Wait Indefinitely (Keep job running)
+        shell: powershell
+        run: |
+          Write-Output "Keeping job alive so RDP tunnel stays open. Press CTRL+C to stop."
+          while ($true) { Start-Sleep -Seconds 60 }
