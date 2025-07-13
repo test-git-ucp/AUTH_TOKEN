@@ -11,26 +11,31 @@ jobs:
         run: Invoke-WebRequest https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip -OutFile ngrok.zip
 
       - name: Extract Ngrok
-        run: Expand-Archive ngrok.zip
+        run: Expand-Archive ngrok.zip -DestinationPath ngrok
 
       - name: Add Ngrok Auth Token to Config
         run: |
           mkdir $env:USERPROFILE\.ngrok2
-          "$Env:NGROK_AUTH_TOKEN" | Out-File $env:USERPROFILE\.ngrok2\ngrok.yml -Encoding ASCII
-          Add-Content $env:USERPROFILE\.ngrok2\ngrok.yml "authtoken: $Env:NGROK_AUTH_TOKEN"
+          "authtoken: $Env:NGROK_AUTH_TOKEN" | Out-File $env:USERPROFILE\.ngrok2\ngrok.yml -Encoding ASCII
         env:
           NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
 
-      - name: Enable RDP
+      - name: Enable RDP and Set Password
         run: |
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
           Set-LocalUser -Name "runneradmin" -Password (ConvertTo-SecureString "YourPassword123!" -AsPlainText -Force)
 
-      - name: Start Ngrok Tunnel and Show URL
+      - name: Start Ngrok Tunnel and Show RDP Info
         run: |
-          Start-Process -NoNewWindow -FilePath ".\ngrok\ngrok.exe" -ArgumentList "tcp 3389"
-          Start-Sleep -Seconds 15
-          Invoke-WebRequest -UseBasicParsing http://127.0.0.1:4040/api/tunnels | ConvertTo-Json | Out-File tunnel.json
-          Get-Content tunnel.json
+          .\ngrok\ngrok.exe tcp 3389 > $null &
+          Start-Sleep -Seconds 10
+          $tunnelInfo = Invoke-RestMethod -Uri http://127.0.0.1:4040/api/tunnels
+          $rdpAddress = $tunnelInfo.tunnels[0].public_url -replace "tcp://", ""
+          Write-Output "=========================================="
+          Write-Output "🔐 Connect to RDP using:"
+          Write-Output "📡 Address: $rdpAddress"
+          Write-Output "🧑‍💻 Username: runneradmin"
+          Write-Output "🔑 Password: YourPassword123!"
+          Write-Output "=========================================="
