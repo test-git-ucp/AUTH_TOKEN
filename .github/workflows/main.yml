@@ -1,4 +1,4 @@
-name: Windows RDP
+name: Windows RDP via Ngrok
 
 on: [push]
 
@@ -7,22 +7,58 @@ jobs:
     runs-on: windows-latest
 
     steps:
-    - name: Download Ngrok
-      run: Invoke-WebRequest https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip -OutFile ngrok.zip
+      - name: Download Ngrok
+        run: Invoke-WebRequest https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip -OutFile ngrok.zip
 
-    - name: Extract Ngrok
-      run: Expand-Archive ngrok.zip
+      - name: Extract Ngrok
+        run: Expand-Archive ngrok.zip -DestinationPath ngrok
 
-    - name: Auth Ngrok
-      run: .\ngrok\ngrok.exe authtoken $env:NGROK_AUTH_TOKEN
-      env:
-        NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
+      - name: Auth Ngrok
+        run: .\ngrok\ngrok.exe authtoken $env:NGROK_AUTH_TOKEN
+        env:
+          NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
 
-    - name: Enable RDP
-      run: |
-        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
-        Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-        Set-LocalUser -Name "runneradmin" -Password (ConvertTo-SecureString "Str0ngP@ssw0rd!" -AsPlainText -Force)
+      - name: Enable RDP and Disable NLA (Fix 0x4 error)
+        run: |
+          # Enable Remote Desktop
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
 
-    - name: Start Ngrok Tunnel
-      run: .\ngrok\ngrok.exe tcp 3389
+          # Enable Remote Desktop firewall rules
+          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+
+          # Disable NLA (Network Level Authentication) to avoid error 0x4
+          Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name 'UserAuthentication' -Value 0
+
+          # Set strong password for runneradmin
+          Set-LocalUser -Name "runneradmin" -Password (ConvertTo-SecureString "Str0ngP@ssw0rd!" -AsPlainText -Force)
+
+      - name: Start Ngrok Tunnel
+        shell: powershell
+        run: |
+          Start-Process "$PWD\ngrok\ngrok.exe" -ArgumentList "tcp 3389" -NoNewWindow
+          Start-Sleep -Seconds 15
+
+          # Try to get public URL from Ngrok API with retry
+          $success = $false
+          for ($i=0; $i -lt 5; $i++) {
+              try {
+                  $tunnelInfo = Invoke-RestMethod -Uri http://127.0.0.1:4040/api/tunnels
+                  $success = $true
+                  break
+              } catch {
+                  Write-Host "Waiting for ngrok tunnel to start... retry $($i+1)"
+                  Start-Sleep -Seconds 5
+              }
+          }
+
+          if (-not $success) {
+              Write-Error "Ngrok tunnel failed to start"
+              exit 1
+          }
+
+          $rdpAddress = $tunnelInfo.tunnels[0].public_url -replace "tcp://", ""
+          Write-Output "=========================================="
+          Write-Output "RDP ADDRESS: $rdpAddress"
+          Write-Output "USERNAME   : runneradmin"
+          Write-Output "PASSWORD   : Str0ngP@ssw0rd!"
+          Write-Output "=========================================="
