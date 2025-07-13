@@ -13,7 +13,7 @@ jobs:
       - name: Extract Ngrok
         run: Expand-Archive ngrok.zip -DestinationPath ngrok
 
-      - name: Add Ngrok Auth Token to Config
+      - name: Add Ngrok Auth Token
         run: |
           mkdir $env:USERPROFILE\.ngrok2
           "authtoken: $Env:NGROK_AUTH_TOKEN" | Out-File $env:USERPROFILE\.ngrok2\ngrok.yml -Encoding ASCII
@@ -24,15 +24,17 @@ jobs:
         run: |
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
           Set-LocalUser -Name "runneradmin" -Password (ConvertTo-SecureString "YourPassword123!" -AsPlainText -Force)
 
       - name: Start Ngrok Tunnel and Show RDP Info
+        shell: powershell
         run: |
-          .\ngrok\ngrok.exe tcp 3389 > $null &
-          Start-Sleep -Seconds 10
+          Start-Process "$PWD\ngrok\ngrok.exe" -ArgumentList "tcp 3389"
+          Start-Sleep -Seconds 15
+
           $tunnelInfo = Invoke-RestMethod -Uri http://127.0.0.1:4040/api/tunnels
           $rdpAddress = $tunnelInfo.tunnels[0].public_url -replace "tcp://", ""
+
           Write-Output "=========================================="
           Write-Output "🔐 Connect to RDP using:"
           Write-Output "📡 Address: $rdpAddress"
