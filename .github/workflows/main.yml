@@ -1,6 +1,6 @@
 name: Free RDP via Ngrok
 
-on: [push,workflow_dispatch]
+on: [push]
 
 jobs:
   build:
