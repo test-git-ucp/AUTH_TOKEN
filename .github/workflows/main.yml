@@ -36,8 +36,8 @@ jobs:
           $rdpAddress = $tunnelInfo.tunnels[0].public_url -replace "tcp://", ""
 
           Write-Output "=========================================="
-          Write-Output "🔐 Connect to RDP using:"
-          Write-Output "📡 Address: $rdpAddress"
-          Write-Output "🧑‍💻 Username: runneradmin"
-          Write-Output "🔑 Password: YourPassword123!"
+          Write-Output "Connect to RDP using:"
+          Write-Output "Address: $rdpAddress"
+          Write-Output "Username: runneradmin"
+          Write-Output "Password: YourPassword123!"
           Write-Output "=========================================="
